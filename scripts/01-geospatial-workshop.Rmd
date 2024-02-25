@@ -48,12 +48,12 @@ knitr::opts_chunk$set(echo = TRUE, eval=T, warning=F, message=F)
     -   boundary data: polygon/shape data delineating a geographical area
     -   grid or raster data: usually squares/rectangles over the Earth's surface with specific attributes
 
-- Uses Coordinate Reference System (CRS) 
+-   Uses Coordinate Reference System (CRS)
 
 ## Mapping
 
--   Common application is to show point data within a region or geographic boundaries of interest, ie, are homicides in Chicago concentrated in certain neighborhoods? 
-
+-   Common application is to show point data within a region or geographic boundaries of interest, ie, are homicides in Chicago concentrated in certain neighborhoods?
+-   Let's map crime in Chicago neighborhoods and census tracts
 
 ```{r}
 # Load required libraries
@@ -64,50 +64,29 @@ library(tidyverse)
 library(colorspace)
 ```
 
-## 
+## Read in the data
+
 \scriptsize
+
 ```{r}
-path <- here::here()
-crime_data <- read.csv(paste0(path,"/data/2016-2020-chicago-crime.csv"))
 
-neighborhoods <- st_read(
-  paste0(path,
-         "/data/Boundaries - Neighborhoods.geojson"),
-  quiet=T)
+crime_data <- read.csv("../data/2016-2020-chicago-crime.csv")
 
-census_tracts <- st_read(
-  paste0(path,
-         "/data/Boundaries - Census Tracts - 2010.geojson"), 
-  quiet=T)
+neighborhoods <- st_read("../data/Boundaries - Neighborhoods.geojson",quiet=T)
+
+census_tracts <- st_read("../data/Boundaries - Census Tracts - 2010.geojson", quiet=T)
 
 homicide <- crime_data %>% 
   filter(Primary.Type=="HOMICIDE")
 
 ```
 
-# Kernel Density Estimation
+## Code: Homicides in Chicago Neighborhoods
 
-# Global and Local Moran's I
+\scriptsize
 
-# Getis-Ord / G\*
-
-# Wrap-up
-
-```{r}
-path <- here::here()
-crime_data <- read.csv(paste0(path, "/data/2016-2020-chicago-crime.csv"))
-
-neighborhoods = st_read(paste0(path,"/data/Boundaries - Neighborhoods.geojson"), quiet=T)
-#neighborhoods = st_read(paste0(path,"/data/Boundaries - Census Tracts - 2010.geojson"), quiet=T)
-
-homicide <- crime_data %>% 
-  filter(Primary.Type=="HOMICIDE")
-
-### double check CRS and refernece 
-```
-
-```{r}
-chicago_map <- neighborhoods %>%
+```{r, }
+neighborhoods_map <- neighborhoods %>%
   ggplot() + 
   geom_point(data = homicide, aes(x=Longitude, y=Latitude), shape=1, color="red",size=.005)+
   geom_sf(aes(geometry=geometry), fill="transparent", linewidth=.25) + 
@@ -116,47 +95,150 @@ chicago_map <- neighborhoods %>%
         axis.ticks = element_blank(),
         rect = element_blank(), 
         legend.position = "bottom") + 
-  labs(x="", y="", title = "Homicides in Chicago (2016-2019)")
-
-chicago_map
+  labs(x="", y="")#, title = "Homicides in Chicago (2016-2019)", 
+      # subtitle = "By Neighborhood")
 ```
 
+## Output: Homicides in Chicago (2016-2019) by Neighborhood
+
+```{r, eval=T, echo=F}
+neighborhoods_map
+```
+
+## Code: Homicides in Chicago Census Tracts
+
+\scriptsize
+
 ```{r}
-point_sf <- st_as_sf(homicide, coords = c("Longitude", "Latitude"), crs = 4326) # coordinate reference systems in slide 
+tracts_map <- census_tracts %>%
+  ggplot() + 
+  geom_point(data = homicide, aes(x=Longitude, y=Latitude), shape=1, color="red",size=.005)+
+  geom_sf(aes(geometry=geometry), fill="transparent", linewidth=.25) + 
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(), 
+        legend.position = "bottom") + 
+  labs(x="", y="") #, title = "Homicides in Chicago (2016-2019)", 
+      # subtitle = "By Neighborhood")
+```
+
+## Output: Homicides in Chicago (2016-2019) by Census Tract
+
+```{r, eval=T, echo=F}
+tracts_map
+```
+
+## Comparison
+
+```{r eval=T, echo=F, fig.width=3.8}
+neighborhoods_map
+tracts_map
+```
+
+## Let's make neighborhood and census tract heat maps now
+
+```{r}
+point_sf <- st_as_sf(homicide, coords = c("Longitude", "Latitude"), crs = 4326) # coordinate reference systems  
+
+#crs=4326 WGS 1984 latitudes and longitudes (EPSG 4326), this is the most popular projection
 
 neighborhoods$homicides <- lengths(st_intersects(neighborhoods, point_sf))
+census_tracts$homicides <- lengths(st_intersects(census_tracts, point_sf))
 ```
 
+## Neighborhood Heat Map
+
 ```{r}
-chicago_map <- neighborhoods %>%
+neighborhood_heat_map <- neighborhoods %>%
   ggplot() + 
   geom_sf(aes(geometry=geometry, fill=homicides), linewidth=.25) + 
   theme(axis.text.x = element_blank(),
         axis.text.y = element_blank(),
         axis.ticks = element_blank(),
         rect = element_blank(), 
-        legend.position = "bottom") + 
-  labs(x="", y="", title = "Homicides in Chicago (2016-2019)") + 
-  scale_fill_continuous_divergingx(palette = 'RdBu', mid = mean(neighborhoods$homicides), rev=T,name = "")
+        legend.position = "none") + 
+  labs(x="", y="") + 
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = median(neighborhoods$homicides), rev=T,name = "")
 
-chicago_map
 ```
+
+## Census Tract Heat Map
+
+```{r}
+tract_heat_map <- census_tracts %>%
+  ggplot() + 
+  geom_sf(aes(geometry=geometry, fill=homicides), linewidth=.25) + 
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(), 
+        legend.position = "none") + 
+  labs(x="", y="") + 
+  scale_fill_continuous_divergingx(palette = 'RdBu', mid = median(census_tracts$homicides), rev=T,name = "")
+
+```
+
+## Heat Map Comparison
+
+```{r eval=T, echo=F, fig.width=3.8}
+neighborhood_heat_map
+tract_heat_map
+```
+
+## Point Pattern Analysis
+
+-   Heat maps and other visuals can be informative but often want to do more rigorous analysis of spatial point patterns
+
+-   We are interested in understanding the spatial distribution of homicides in Chicago:
+
+    -   Are homicide events distributed randomly, clustered, or dispersed?
+    -   What is the overall density or intensity of events across the study area? What are the underlying processes driving the spatial distribution of points?
+    -   Are there statistically significant clusters of events in the study area?
+    -   Where are the areas with significantly higher or lower homicide event densities compared to the surrounding areas?
+
+-   We can apply these questions and framework to analyzing any point pattern data within a region
+
+# Kernel Density Estimation
+
+## Spatial Point Patterns
+
+-   Countable sets of points that arise as realizations of stochastic point processes taking values in $A\subset R^2$
+-   A spatial point pattern can be denoted as $\{x_1, x_2,...,x_{N(A)}\}$, where $N(A)$ is the number of points in $A$ where $N(A)$ is a random variable.
+-   Thus, different realizations of the spatial point process may result in both different numbers and locations of points (Spatial Statistics, Ch. 17)
+-   Refer to the points as events
+-   We will use `spatstat` package to analyze point patterns
+
+## spatstat 
+
++ We will use `density.ppp()` function from spatstat for kernel density estimation 
++ Technical notes on `spatstat`: 
+    + spatial point patterns are represented as objects of class `ppp` (planar point pattern)
+    + the `as.ppp()` function converts a `sf` object to a `ppp` object and takes as inputs point coordinates and an observation window (either a bounding box or a polygon)
 
 ```{r}
 library(spatstat)
 
-borders = st_transform(neighborhoods$geometry, 6454)
+borders = st_transform(neighborhoods$geometry, crs=6454)
+#Point patterns must be projected (rather than being lat/long), so the Illinois East State Plane Cordinate System in meters (EPSG 6454) is used. If you are analyzing a different area, you should use a planar coordinate system appropriate to your area.
 
-ppp.homicide = as.ppp(st_transform(point_sf$geometry, 6454))
+ppp.homicide = as.ppp(st_transform(point_sf$geometry, crs=6454))
 
 density.homicide = density.ppp(ppp.homicide, w=as.owin(borders), sigma=500)
 density.homicide = density.ppp(ppp.homicide, sigma=500)
+
 
 plot(density.homicide, col=colorRampPalette(c("navy", "gray", "red")), main = "Density of Homicides in Chicago (2016-2019)")
 plot(borders, col=NA, border="gray", add=T)
 
 ## incorpoarting plotly/ double check the ggplot2
 ```
+
+# Global and Local Moran's I
+
+# Getis-Ord / G\*
+
+# Wrap-up
 
 ```{r}
 
